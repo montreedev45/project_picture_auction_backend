@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const auctionController = require('../controllers/auctionController')
+const authController = require('../controllers/authController')
 
 // --- API Endpoints ---
 
@@ -10,11 +11,15 @@ router.get('/products', auctionController.getProducts);
 router.get('/product/:id', auctionController.getProductById);
 
 // 3. GET /api/auction/users - ดึงผู้ใช้ทั้งหมด
-router.get('/users', auctionController.getUsers);
+router.get('/users', authController.getUsers);
 
 // 4. GET /api/auction/users/:id - ดึงผู้ใช้ตาม ID
-router.get('/users/:id', auctionController.getUserById);
+router.get('/users/:id', authController.getUserById);
 
+// 5. POST /api/auction/register - สมัครสมาชิก
+router.post('/register', authController.register);
 
+// 6. POST /api/auction/login - ล็อกอิน
+router.post('/login', authController.login);
 
 module.exports = router;

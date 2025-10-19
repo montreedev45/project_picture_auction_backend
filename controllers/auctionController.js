@@ -21,23 +21,3 @@ exports.getProductById = async(req, res, next) => {
     }
 }
 
-exports.getUsers = async(req, res, next) => {
-    try {
-        const users = await auctionService.getUsers(); 
-        return res.status(200).json({ message: 'Users fetched successfully', users });
-        
-    } catch (error) {
-        return next(error); 
-    }
-}
-
-exports.getUserById = async(req, res, next) => {
-    try {
-        const UserId = req.params.id;
-        const user = await auctionService.getUserById(UserId); 
-        return res.status(200).json({ message: 'User By Id fetched successfully', user });
-        
-    } catch (error) {
-        return next(error); 
-    }
-}

@@ -30,19 +30,8 @@ const initialProducts = [
 ];
 
 
-
-const initialUsers = [
-    { id: 1, username: "user1", password: "1234", firstname: "montree", lastname: "chanuanklang", email: "test@gmail.com", phone: "0123456789", address: "mukdahan"},
-    { id: 2, username: "user2", password: "1234", firstname: "jirawan", lastname: "pangpun", email: "test@gmail.com", phone: "0123456789", address: "mukdahan"},
-];
-
-
 exports.getAllProductsFromDB = async () => {
     await new Promise(resolve => setTimeout(resolve, 50)); 
     return initialProducts;
 };
 
-exports.getAllUsersFromDB = async () => {
-    await new Promise(resolve => setTimeout(resolve, 50)); 
-    return initialUsers;
-};
