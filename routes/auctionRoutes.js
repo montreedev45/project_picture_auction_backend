@@ -22,4 +22,7 @@ router.post('/register', authController.register);
 // 6. POST /api/auction/login - ล็อกอิน
 router.post('/login', authController.login);
 
+// 7. PUR /api/auction/users/:id
+router.put('/users/:id', authController.updateUserById);
+
 module.exports = router;

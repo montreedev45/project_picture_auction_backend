@@ -71,3 +71,42 @@ exports.login = async (req, res, next) => {
     return next(error);
   }
 };
+
+
+exports.updateUserById = async(req, res, next) => {
+    const targetUserId = req.params.id; 
+    const updates = req.body;
+    
+    try {
+        const updatedUser = await authService.updateUserProfile(targetUserId, updates); // ⬅️ แก้ไขชื่อ Service ให้ชัดเจนและส่ง Object เดียว
+        if (!updatedUser) {
+            // กรณีที่ Service คืนค่า null กลับมา (เช่น หา user ไม่เจอ)
+             return res.status(404).json({ message: "User not found." });
+        }
+        
+        // ✅ Tech Stack: Status 200/202 สำหรับ Update สำเร็จ
+        return res
+            .status(200) // 200 OK หรือ 202 Accepted
+            .json({ 
+                message: "User profile updated successfully.", 
+                user: updatedUser // 💡 Service ได้จัดการลบ password ออกแล้ว
+            });
+
+    } catch (error) {
+        console.error("Profile update error:", error.message);
+        
+        // 💡 Error Handling: จัดการ Error Status Code ตามประเภทของ Error ที่มาจาก Service
+        if (error.message.includes('not found')) {
+            return res.status(404).json({ message: error.message });
+        }
+        if (error.message.includes('already in use')) {
+            return res.status(400).json({ message: error.message });
+        }
+        if (error.message.includes('forbidden')) {
+            return res.status(403).json({ message: error.message });
+        }
+        
+        // Fallback 500
+        res.status(500).json({ message: "Server error during profile update.", error: error.message });
+    }
+}
