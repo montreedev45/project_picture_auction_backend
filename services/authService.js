@@ -2,6 +2,7 @@
 const bcrypt = require('bcrypt');
 const saltRounds = 5; // ยิ่งมากยิ่งปลอดภัย แต่ยิ่งช้า
 const User = require('../models/User');
+const { getNextSequenceValue } = require('../utils/idGenerator');
 
 async function hashPasswordAndSave(plainTextPassword) {
 
@@ -55,35 +56,16 @@ exports.registerUser = async (
     lastname, 
     phone, 
     address, 
-    acc_coin = 10000, // 🔑 กำหนดค่า Default ใน Service Layer
-    acc_createdate = new Date() // 🔑 กำหนดค่า Default ใน Service Layer
+    acc_coin = 10000// 🔑 กำหนดค่า Default ใน Service Layer
 ) => {
-    
-    // 1. INPUT VALIDATION: ตรวจสอบ Input ทั้งหมดอย่างละเอียด
-    // (ใช้ Trim() สำหรับ String เพื่อลบช่องว่างหัวท้ายก่อนตรวจสอบ)
-    //const requiredFields = [username, email, password, firstname, lastname, phone, address];
-
-    // if (requiredFields.some(field => !field || (typeof field === 'string' && field.trim() === '')) || password.length < 6) {
-    //     const error = new Error('Username, valid email, password (min 6 chars), Firstname, Lastname, Phone, and Address are required.');
-    //     error.statusCode = 400; // Bad Request
-    //     throw error;
-    // }
-
-    // 2. CONFLICT CHECK: ตรวจสอบความซ้ำซ้อนของอีเมล (Uncommented and implemented)
-    // ⚠️ ต้องมีฟังก์ชัน findUserByEmail() ที่เรียก Mongoose Query เช่น User.findOne({ email: email })
-    // const existingUser = await findUserByEmail(email); 
-    // if (existingUser) {
-    //     const error = new Error('This email is already registered.');
-    //     error.statusCode = 409; // HTTP Conflict
-    //     throw error;
-    // }
-
-    // 3. PASSWORD HASHING: Hash รหัสผ่านก่อนบันทึก
-    // ⚠️ ต้องมีฟังก์ชัน hashPasswordAndSave() ที่ใช้ Library เช่น bcrypt
+   
     const passwordHash = await hashPasswordAndSave(password);
+
+    const newAccId = await getNextSequenceValue('user');
     
     // 4. SAVE NEW USER: บันทึกข้อมูลผู้ใช้ใหม่ลงฐานข้อมูล
     const newUser = await saveNewUser({ 
+        acc_id: newAccId,
         username: username.trim(), 
         email: email.trim(), 
         passwordHash, // ใช้ค่าที่ Hash แล้ว
@@ -91,12 +73,8 @@ exports.registerUser = async (
         lastname: lastname.trim(), 
         phone: phone.trim(), 
         address: address.trim(),
-        acc_coin,
-        acc_createdate
+        acc_coin
     });
-    
-    // 5. RETURN: คืนค่า Document ที่ถูกสร้างใหม่
-    // 💡 ควรมีการใช้ .select('-passwordHash') หรือการซ่อนรหัสผ่านก่อนคืนค่าให้ Client
     return newUser;
 };
 
@@ -186,6 +164,7 @@ exports.registerUser = async (
 const saveNewUser = async (userData) => {
     // 💡 Tech Stack: ใช้ Mongoose Model ในการสร้างและบันทึก Document ใหม่
     const newUser = new User({
+        acc_id: userData.acc_id,
         acc_username: userData.username,
         acc_email: userData.email,
         acc_password: userData.passwordHash, // Mongoose จะจัดการ select: false ให้เอง
@@ -193,8 +172,7 @@ const saveNewUser = async (userData) => {
         acc_lastname: userData.lastname,
         acc_phone: userData.phone,
         acc_address: userData.address,
-        acc_coin: userData.acc_coin,
-        acc_createdate: userData.acc_createdate
+        acc_coin: userData.acc_coin
         // ไม่ต้อง save acc_createdate เพราะ Mongoose จัดการด้วย timestamps: true
     });
 

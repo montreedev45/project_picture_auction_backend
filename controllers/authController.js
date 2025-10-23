@@ -28,7 +28,7 @@ exports.getUserById = async (req, res, next) => {
 
 // Register
 exports.register = async (req, res, next) => {
-  const { acc_username, acc_email, acc_password, acc_firstname, acc_lastname, acc_phone, acc_address, acc_coin, acc_createdate } = req.body; // ดึงข้อมูลจาก request ที่ส่งมาจาก frontend
+  const { acc_username, acc_email, acc_password, acc_firstname, acc_lastname, acc_phone, acc_address, acc_coin } = req.body; // ดึงข้อมูลจาก request ที่ส่งมาจาก frontend
   console.log(req.body)
   try {
     const newUser = await authService.registerUser(
@@ -39,8 +39,7 @@ exports.register = async (req, res, next) => {
       acc_lastname,
       acc_phone,
       acc_address,
-      acc_coin,
-      acc_createdate
+      acc_coin
     );
     return res
       .status(201)
