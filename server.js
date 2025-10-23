@@ -1,14 +1,14 @@
 const express = require('express');
 const cors = require('cors');
+const databaseConnect = require('./config/db');
 const dotenv = require('dotenv');
 const auctionRoutes = require('./routes/auctionRoutes');
 
-// Config: โหลดตัวแปรสภาพแวดล้อมจากไฟล์ .env
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT;
-
+databaseConnect();
 
 // --- Middlewares ---
 // 1. CORS Configuration: อนุญาตให้ Frontend เข้าถึงได้
@@ -24,7 +24,6 @@ app.use(cors(corsOptions));
 
 // 2. ทำให้ Express สามารถอ่าน JSON จาก Request Body ได้
 app.use(express.json());
-
 
 // --- Routes ---
 // ตั้งค่า Base URL สำหรับ API 
