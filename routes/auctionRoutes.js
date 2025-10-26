@@ -1,7 +1,9 @@
 const router = require('express').Router();
 const auctionController = require('../controllers/auctionController')
 const authController = require('../controllers/authController')
-
+const { protect } = require('../middlewares/authMiddleware')
+ 
+// ไม่ควรแสดง id ใน route เมื่อเกี่ยวกับตัวเอง เช่น update เพราะ ตอน login jwt ได้รับ id แล้ว
 // --- API Endpoints ---
 
 // 1. GET /api/auction/products - ดึงสินค้าทั้งหมด
@@ -22,7 +24,17 @@ router.post('/register', authController.register);
 // 6. POST /api/auction/login - ล็อกอิน
 router.post('/login', authController.login);
 
-// 7. PUR /api/auction/users/:id
-router.put('/users/:id', authController.updateUserById);
+// 7. PUT /api/auction/users/profile - อัปเดต โปรไฟล์
+router.put('/users/profile', protect, authController.updateUserById);
+
+// 8. PUT /api/auction/profile/password - อัปเดต รหัสผ่าน
+router.put('/profile/password', protect, authController.updatePasswordById);
+
+// 9. POST /api/auction/forgot-password - ลืมรหัสผ่าน
+router.post('/forgot-password', authController.forgotPassword);
+
+// 10. POST /api/auction/reset-password:token - ลืมรหัสผ่าน
+router.post('/reset-password/:token', authController.resetPassword);
+
 
 module.exports = router;
