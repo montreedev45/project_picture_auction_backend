@@ -106,22 +106,22 @@ exports.updateUserById = async (req, res, next) => {
 
 exports.updatePasswordById = async (req, res, next) => {
   const userId = req.user.id;
-  const { currectPassword, newPassword } = req.body;
+  const { currentPassword, newPassword } = req.body;
 
-    if (!currectPassword || !newPassword) {
-      const error = new Error("currectPassword and newPassword are required for update password.");
+    if (!currentPassword || !newPassword) {
+      const error = new Error("currentPassword and newPassword are required for update password.");
       error.statusCode = 400;
       return next(error);
     }
 
-    if (currectPassword.length < 6 || newPassword.length <6) {
+    if (currentPassword.length < 6 || newPassword.length <6) {
       const error = new Error("Password minimum length is 6 characters.");
       error.statusCode = 400;
       return next(error);
     }
 
   try { 
-    const updatePassword = await authService.updatePassword(userId, currectPassword, newPassword);
+    const updatePassword = await authService.updatePassword(userId, currentPassword, newPassword);
     return res.
               status(200).
               json({ message: 'update password successfully' })
