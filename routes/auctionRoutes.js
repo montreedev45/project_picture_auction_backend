@@ -36,5 +36,7 @@ router.post('/forgot-password', authController.forgotPassword);
 // 10. POST /api/auction/reset-password:token - ลืมรหัสผ่าน
 router.post('/reset-password/:token', authController.resetPassword);
 
+router.post('/products/:productId/toggle-like', protect, auctionController.toggleLikeProduct)
+
 
 module.exports = router;

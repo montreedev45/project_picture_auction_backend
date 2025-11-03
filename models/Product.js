@@ -19,17 +19,21 @@ const productSchema = new mongoose.Schema({
     },
     
     // ข้อมูล Profile (สำหรับ Update)
-    pro_price: { type: Number, trim: true },
-    pro_time: { type: Number, required: true, default: 0 },
+    pro_price: { type: Number, trim: true , default: 0},
+    pro_time: { type: Number },
     pro_status: {
         type: String,
         trim: true,
     },
-    pro_islike: { type: Boolean , default: false },
     pro_imgurl: { type: String },
     pro_datecome: { type: Date},
     pro_dateend: { type: Date},
-    pro_accby: { type: String}
+    pro_accby: { type: String},
+    pro_likecount: { type: Number},
+    likes: [{
+        type: String,
+        ref: 'User'
+    }]
 }, {
     // 💡 UX/UI: ให้ Mongoose จัดการ timestamp อัตโนมัติ (createdAt, updatedAt)
     timestamps: true 

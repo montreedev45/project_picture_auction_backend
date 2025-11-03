@@ -23,7 +23,13 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // 2. ทำให้ Express สามารถอ่าน JSON จาก Request Body ได้
-app.use(express.json());
+app.use(express.json({
+    // 🔑 Strict: false ยอมให้ body-parser รับ body ที่ว่างเปล่าหรือเป็น null
+    // แต่ยังคงตรวจสอบ Content-Type อย่างเข้มงวด
+    strict: false, 
+    // 💡 type: ตรวจสอบเฉพาะ Header ที่ตรงกัน
+    type: 'application/json' 
+}));
 
 // --- Routes ---
 // ตั้งค่า Base URL สำหรับ API 

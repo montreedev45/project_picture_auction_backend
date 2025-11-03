@@ -21,3 +21,26 @@ exports.getProductById = async(req, res, next) => {
     }
 }
 
+exports.toggleLikeProduct = async (req, res, next) => {
+    // 1. 🔑 FIX: ดึง Parameter จาก req.params
+    const userId = req.user.id;
+    const productsId = parseInt(req.params.productId); // ✅ แก้ไขตรงนี้
+    try {
+        const result = await auctionService.toggleLike(productsId, userId);
+
+        if (result.action === 'liked') {
+            // ✅ FIX: ส่ง 200 OK พร้อม JSON Body
+            return res.status(200).json({ 
+                message: 'Product liked successfully',
+                likeCount: result.likeCount
+            });
+        } else {
+            return res.status(200).json({
+                message: 'Product unliked successfully', // 💡 แก้ไข spelling
+                likeCount: result.likeCount // 💡 แก้ไขชื่อ field
+            });
+        }
+    } catch (error) {
+        return next(error);
+    }
+};

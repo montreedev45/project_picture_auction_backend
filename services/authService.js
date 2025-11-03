@@ -54,6 +54,7 @@ exports.registerUser = async (
   address,
   acc_coin = 10000 //กำหนด default
 ) => {
+  console.log(username)
   const passwordHash = await hashPasswordAndSave(password); //hash password
 
   const newAccId = await getNextSequenceValue("user"); //สร้าง acc_id ใหม่
@@ -145,6 +146,7 @@ const allowedUpdates = [
 
 // update
 exports.updateUserProfile = async (targetUserId, updates) => {
+  console.log(updates)
   const finalUpdates = {};
   const updateKeys = Object.keys(updates); //ดึง key from object  สร้างเป็น array
 
