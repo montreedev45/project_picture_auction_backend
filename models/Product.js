@@ -33,12 +33,26 @@ const productSchema = new mongoose.Schema({
     likes: [{
         type: String,
         ref: 'User'
-    }]
+    }],
+
+    startTimeAuction: {
+        type: Date,
+        default: null
+    },
+    endTimeAuction: {
+        type: Date,
+        default: null
+    }
 }, {
     // 💡 UX/UI: ให้ Mongoose จัดการ timestamp อัตโนมัติ (createdAt, updatedAt)
     timestamps: true 
 });
 
+
+
+
+
 // เราไม่ต้องใช้ Logic `getNextUserId` แล้ว เพราะ MongoDB จะสร้าง _id ให้เอง (ObjectId)
 
 module.exports = mongoose.model('Product', productSchema);
+

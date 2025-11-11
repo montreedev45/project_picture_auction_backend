@@ -1,4 +1,5 @@
 const Product = require("../models/Product");
+const Bid = require('../models/Bid')
 
 exports.getProducts = async () => {
    return await Product.find();
@@ -63,5 +64,77 @@ exports.toggleLike = async (productId, userId) => {
     return {
         action: action,
         likeCount: updatedProducts.pro_likecount
+    };
+};
+
+
+exports.auctionProduct = async (userId, productId, bidPrice) => {
+
+    // 1. 🔍 ค้นหาสินค้า (ใช้ let เพื่อให้เราอัปเดตค่าได้)
+    let product = await Product.findOne({ pro_id: productId });
+
+    if (!product) {
+        throw new Error('Product not found');
+    }
+
+    // 3. 🏁 ตรรกะ "Bid แรก" (ถ้า endTimeAuction ยังไม่มี)
+    if (!product.endTimeAuction) {
+        console.log('First bid! Starting auction timer...');
+        
+        const startTimeAuction = Date.now();
+        const endTimeAuction = startTimeAuction + (product.pro_time * 1000);
+
+        // ใช้ { new: true } เพื่อรับเอกสารที่อัปเดตแล้วกลับมา
+        const updatedProduct = await Product.findOneAndUpdate(
+            { pro_id: productId }, // Query
+            { 
+                startTimeAuction: startTimeAuction,
+                endTimeAuction: endTimeAuction   
+            },
+            { new: true } // Option: ขอข้อมูลใหม่กลับมา
+        );
+
+        // อัปเดตตัวแปร 'product' ให้เป็นข้อมูลใหม่ที่มี 'endTimeAuction' แล้ว
+        product = updatedProduct;
+    }
+
+    // 4. ⏰ (ปรับปรุง) ตรวจสอบเวลา (ตอนนี้ 'product.endTimeAuction' มีค่าแน่นอนแล้ว)
+    if (Date.now() > product.endTimeAuction) {
+        // 🛡️ (ปรับปรุง) ใช้ throw Error แทนการ return string
+        throw new Error('Auction has ended');
+    }
+
+    // 5. 💰 ตรวจสอบราคา
+    if (bidPrice <= product.pro_price) {
+        // 🛡️ (ปรับปรุง) ใช้ throw Error
+        throw new Error('Bid price must be higher than the current price');
+    }
+
+    // --- ถ้าผ่านทุกอย่าง ---
+
+    // 6. 📝 บันทึกประวัติการประมูล (Bid History)
+    // ❗️ (แก้ไข Syntax) ส่งค่าเป็น Object เดียว
+    const newBid = new Bid({
+        pro_id: productId, // (ผมอ้างอิงจากโค้ดเดิมของคุณ)
+        acc_id: userId,    // (ผมอ้างอิงจากโค้ดเดิมของคุณ)
+        bidAmount: bidPrice
+    });
+    await newBid.save();
+
+    // 7. 🔄 อัปเดตสถานะสินค้า (ราคาปัจจุบัน และ ผู้ประมูลล่าสุด)
+    // ❗️ (แก้ไข Syntax) แยก Query และ Update Object
+    const finalProductUpdate = await Product.findOneAndUpdate(
+        { pro_id: productId }, // Query
+        { 
+            pro_price: bidPrice,
+            pro_accby: userId // (ไม่ต้องใช้ `${userId}` ถ้า userId เป็น string อยู่แล้ว)
+        },
+        { new: true } // ขอข้อมูลใหม่
+    );
+
+    // 8. ✅ ส่งข้อมูลกลับไปที่ Controller
+    return {
+        updatedProduct: finalProductUpdate,
+        newBid: newBid
     };
 };

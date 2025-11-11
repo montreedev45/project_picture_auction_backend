@@ -44,3 +44,28 @@ exports.toggleLikeProduct = async (req, res, next) => {
         return next(error);
     }
 };
+
+
+exports.auctionProduct = async (req, res, next) => {
+    try {
+        const userId = req.user.id;
+        const productId = parseInt(req.params.productId, 10);
+
+        const { bidPrice } = req.body;
+        if (!bidPrice || typeof bidPrice !== 'number' || bidPrice <= 0) {
+            // ส่ง Error 400 (Bad Request) ถ้าข้อมูลไม่ถูกต้อง
+            return res.status(400).json({ message: 'Invalid bid price provided' });
+        }
+
+        const result = await auctionService.auctionProduct(userId, productId, bidPrice);
+        const product = result.updatedProduct
+        return res.status(200).json({
+            message: 'Bid placed successfully',
+            product: product // ส่งข้อมูล product ที่อัปเดต และ bid ใหม่ กลับไป
+
+        });
+
+    } catch (error) {
+        return next(error);
+    }
+};
