@@ -1,7 +1,7 @@
 const Counter = require('../models/Counter'); 
 
 exports.getNextSequenceValue = async (collectionName) => {
-    // 🔑 Tech Stack: ต้องใช้ findOneAndUpdate กับ $inc: { sequence_value: 1 } 
+    // ใช้ findOneAndUpdate กับ $inc: { sequence_value: 1 } 
     // และไม่ควรมีฟิลด์ที่ไม่รู้จัก (เช่น acc_id) อยู่ใน Query หรือ Update Body
     const counter = await Counter.findOneAndUpdate(
         // 1. QUERY: ค้นหาด้วย _id (ชื่อ Collection)

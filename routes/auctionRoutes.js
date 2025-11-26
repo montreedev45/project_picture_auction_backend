@@ -1,8 +1,11 @@
 const router = require('express').Router();
-const auctionController = require('../controllers/auctionController')
+const auctionController = require('../controllers/auctionController') 
 const authController = require('../controllers/authController')
+const { checkTokenStatus } = require('../controllers/authController')
 const { protect } = require('../middlewares/authMiddleware')
- 
+const { uploadProfilePic } = require('../middlewares/uploadMiddleware')
+// const { updateProfile } = require('../middleware/uploadMiddleware'); // Multer
+
 // ไม่ควรแสดง id ใน route เมื่อเกี่ยวกับตัวเอง เช่น update เพราะ ตอน login jwt ได้รับ id แล้ว
 // --- API Endpoints ---
 
@@ -25,7 +28,7 @@ router.post('/register', authController.register);
 router.post('/login', authController.login);
 
 // 7. PUT /api/auction/users/profile - อัปเดต โปรไฟล์
-router.put('/users/profile', protect, authController.updateUserById);
+router.put('/users/profile', protect, uploadProfilePic, authController.updateProfile);
 
 // 8. PUT /api/auction/profile/password - อัปเดต รหัสผ่าน
 router.put('/profile/password', protect, authController.updatePasswordById);
@@ -39,6 +42,12 @@ router.post('/reset-password/:token', authController.resetPassword);
 router.post('/products/:productId/toggle-like', protect, auctionController.toggleLikeProduct);
 
 router.post('/products/:productId/bids',protect, auctionController.auctionProduct)
+
+router.get('/products/:productId/history',protect, auctionController.auctionHistory)
+
+router.post('/checkToken',protect, checkTokenStatus)
+
+
 
 
 module.exports = router;

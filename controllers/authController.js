@@ -15,7 +15,7 @@ exports.getUsers = async (req, res, next) => {
 // Get users by ID
 exports.getUserById = async (req, res, next) => {
   try {
-    const userId = req.params.id;
+    const userId = parseInt(req.params.id, 10);
     const user = await authService.getUserById(userId);
     return res
       .status(200)
@@ -35,11 +35,28 @@ exports.register = async (req, res, next) => {
     lastname,
     phone,
     address,
-    coin,
+    coin = 10000,
   } = req.body; // ดึงข้อมูลจาก request ที่ส่งมาจาก frontend
 
   try {
-    console.log(password)
+    if (!username || !email || !password) {
+      const err = new Error("Username, email, and password are required.");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (password.length < 6) {
+      const err = new Error("Password must be at least 6 characters long.");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (!email.includes("@")) {
+      const err = new Error("Invalid email format.");
+      err.statusCode = 400;
+      throw err;
+    }
+
     const newUser = await authService.registerUser(
       username,
       email,
@@ -104,73 +121,107 @@ exports.updateUserById = async (req, res, next) => {
   }
 };
 
+exports.updateProfile = async (req, res, next) => {
+  const updateFields = { ...req.body };
+  const userId = req.user.id;
+  const newFile = req.file; // ข้อมูลไฟล์จาก Multer
+
+  // ตรวจสอบว่ามีการเปลี่ยนแปลงหรือไม่
+  if (Object.keys(updateFields).length === 0 && !newFile) {
+    return res.status(200).json({ message: "No changes detected." });
+  }
+
+  try {
+    // 🔑 1. เรียกใช้ Service แทนการเขียน Logic ทั้งหมดที่นี่
+    const updatedUser = await authService.updateUserProfile2(
+      userId,
+      updateFields,
+      newFile
+    );
+
+    // 2. จัดการ Response
+    res.status(200).json({
+      message: "Profile updated successfully!",
+      fileName: updatedUser.acc_profile_pic,
+      user: updatedUser,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
 
 exports.updatePasswordById = async (req, res, next) => {
   const userId = req.user.id;
   const { currentPassword, newPassword } = req.body;
 
-    if (!currentPassword || !newPassword) {
-      const error = new Error("currentPassword and newPassword are required for update password.");
-      error.statusCode = 400;
-      return next(error);
-    }
+  if (!currentPassword || !newPassword) {
+    const error = new Error(
+      "currentPassword and newPassword are required for update password."
+    );
+    error.statusCode = 400;
+    return next(error);
+  }
 
-    if (currentPassword.length < 6 || newPassword.length <6) {
-      const error = new Error("Password minimum length is 6 characters.");
-      error.statusCode = 400;
-      return next(error);
-    }
+  if (currentPassword.length < 6 || newPassword.length < 6) {
+    const error = new Error("Password minimum length is 6 characters.");
+    error.statusCode = 400;
+    return next(error);
+  }
 
-  try { 
-    const updatePassword = await authService.updatePassword(userId, currentPassword, newPassword);
-    return res.
-              status(200).
-              json({ message: 'update password successfully' })
+  try {
+    const updatePassword = await authService.updatePassword(
+      userId,
+      currentPassword,
+      newPassword
+    );
+    return res.status(200).json({ message: "update password successfully" });
   } catch (error) {
     return next(error);
-    
   }
-}
+};
 
+exports.forgotPassword = async (req, res, next) => {
+  const { acc_email } = req.body;
 
-
-exports.forgotPassword = async(req, res, next) => {
-    const { acc_email } = req.body;
-
-    try {
-      const user = await authService.forgotPassword(acc_email)
-      res.status(200).json({user})
-    } catch (error) {
-      return next(error)
-    }
-}
-
-
+  try {
+    const user = await authService.forgotPassword(acc_email);
+    res.status(200).json({ user });
+  } catch (error) {
+    return next(error);
+  }
+};
 
 exports.resetPassword = async (req, res, next) => {
-    // 1. 🔑 Tech Stack: Token มาจาก URL Parameter
-    const token = req.params.token; 
-    
-    // 2. 🔑 Tech Stack: New Password มาจาก Body
-    const { newPassword } = req.body; 
+  // 1. 🔑 Tech Stack: Token มาจาก URL Parameter
+  const token = req.params.token;
 
-    // 3. Validation: ตรวจสอบความครบถ้วนและความยาว
-    if (!token || !newPassword || newPassword.length < 6) {
-        const error = new Error("Token and a valid new password (min 6 chars) are required.");
-        error.statusCode = 400; 
-        return next(error);
-    }
-    
-    try {
-        // 4. Call Service
-        const result = await authService.resetPassword(token, newPassword);
+  // 2. 🔑 Tech Stack: New Password มาจาก Body
+  const { newPassword } = req.body;
 
-        // 5. Response
-        return res
-            .status(200) 
-            .json(result); 
-            
-    } catch (error) {
-        return next(error);
-    }
+  // 3. Validation: ตรวจสอบความครบถ้วนและความยาว
+  if (!token || !newPassword || newPassword.length < 6) {
+    const error = new Error(
+      "Token and a valid new password (min 6 chars) are required."
+    );
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  try {
+    // 4. Call Service
+    const result = await authService.resetPassword(token, newPassword);
+
+    // 5. Response
+    return res.status(200).json(result);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+exports.checkTokenStatus = (req, res) => {
+  // 💡 ถ้าโค้ดมาถึงบรรทัดนี้ได้ หมายความว่า Token VALID 100%
+  res.status(200).json({
+    message: "Token is valid.",
+    user: req.user, // ข้อมูล user ที่ได้จาก Middleware protect
+  });
 };

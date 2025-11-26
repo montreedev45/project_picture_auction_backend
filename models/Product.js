@@ -20,6 +20,7 @@ const productSchema = new mongoose.Schema({
     
     // ข้อมูล Profile (สำหรับ Update)
     pro_price: { type: Number, trim: true , default: 0},
+    pro_min_increment: { type: Number },
     pro_time: { type: Number },
     pro_status: {
         type: String,

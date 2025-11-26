@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const crypto = require('crypto'); // 💡 Tech Stack: ใช้สำหรับสร้าง Random Token
+const { type } = require("os");
 
 const userSchema = new mongoose.Schema(
   {
@@ -36,6 +37,7 @@ const userSchema = new mongoose.Schema(
     acc_createdate: {type: Date},
     resetPasswordToken: { type: String },     // เก็บ Hash ของ Token ที่ถูกเข้ารหัสแล้ว
     resetPasswordExpire: { type: Date },      // เก็บวันที่/เวลาที่ Token หมดอายุ
+    acc_profile_pic: { type: String, default: null }
   },
   {
     timestamps: true,
