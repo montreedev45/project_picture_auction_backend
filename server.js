@@ -5,8 +5,10 @@ const dotenv = require("dotenv");
 const http = require("http");
 const { Server } = require("socket.io");
 const path = require('path');
+const cron = require('node-cron')
 
 const auctionRoutes = require("./routes/auctionRoutes");
+const auctionService = require("./services/auctionService")
 const { setSocketIO, broadcastNewBid } = require('./socketManager');
 const errorHandler = require("./middlewares/errorHandlerMiddleware");
 dotenv.config();
@@ -16,6 +18,32 @@ const httpServer = http.createServer(app); // 1. สร้าง HTTP Server
 const PORT = process.env.PORT || 5000; // 💡 ใส่ Default Port ไว้เผื่อ
 
 databaseConnect();
+
+
+// 🔑 ฟังก์ชันสำหรับเริ่ม Cron Job
+const startScheduler = () => {
+  console.log('Auction scheduler started. Checking every minute.');
+    // 🏆 Tech Stack: Cron Expression
+    // ตั้งค่าให้รันทุกๆ 1 นาที:
+    // * * * * *
+    // | | | | |
+    // | | | | ----- วันในสัปดาห์ (0-7)
+    // | | | ------- เดือน (1-12)
+    // | | --------- วันที่ (1-31)
+    // | ----------- ชั่วโมง (0-23)
+    // ------------- นาที (0-59)
+    
+    cron.schedule('* * * * *', async () => {
+        console.log('Running auction check job...');
+        await auctionService.checkAndEndAuctions();
+    });
+    
+    // 💡 หากต้องการรันทุก 30 วินาที (node-cron ทำไม่ได้ แต่จะใช้ '* * * * *' เป็นทางเลือกที่ดีที่สุด)
+    // 💡 หรือหากต้องการความแม่นยำสูง ให้ใช้ cron.schedule('*/5 * * * * *', ...); (ถ้า Node-Cron รองรับวินาที)
+    
+};
+
+startScheduler()
 
 // ------------------------------------------------
 // SOCKET.IO SETUP

@@ -47,6 +47,8 @@ router.get('/products/:productId/history',protect, auctionController.auctionHist
 
 router.post('/checkToken',protect, checkTokenStatus)
 
+router.post('/coin-packet', protect, auctionController.coinPacket)
+
 
 
 

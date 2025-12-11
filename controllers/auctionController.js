@@ -3,11 +3,57 @@ const { broadcastNewBid } = require("../socketManager"); // ⬅️ ต้อง�
 
 exports.getProducts = async (req, res, next) => {
   try {
-    const products = await auctionService.getProducts();
+    // 1. 🎯 แก้ไข: ดึงเฉพาะ key 'category' ออกจาก req.query
+    // 🔑 ถ้าไม่ส่งมา category จะเป็น undefined
+    const { "status[]": pro_status, pro_name_input: pro_name } = req.query;
+
+    // 💡 หากต้องการดู Query Parameters ทั้งหมด
+    console.log("pro_name_input", pro_name);
+    console.log("All Query Params:", req.query);
+    console.log("Category Query Value:", pro_status); // ค่าที่ส่งมาสำหรับ category
+
+    let queryCriteria = {};
+
+    // 2. 🔧 จัดการค่า: ทำให้เป็น Array ของ Category เสมอ
+    // เช่น: undefined => [], 'Electronics' => ['Electronics'], ['E', 'B'] => ['E', 'B']
+    const pro_statusArray = pro_status
+      ? Array.isArray(pro_status)
+        ? pro_status
+        : [pro_status]
+      : [];
+
+    // 3. 🔑 เช็คความยาวของ Array ก่อนสร้าง Criteria
+    if (pro_statusArray.length > 0) {
+      // 🎯 สร้าง MongoDB Query Criteria โดยใช้ $in
+      queryCriteria.pro_status = { $in: pro_statusArray };
+    }
+
+    const Trim_pro_name = pro_name ? String(pro_name).trim() : "";
+    if (Trim_pro_name.length > 0) {
+      // 🔑 สร้าง Regular Expression
+      // '^' : หมายถึง ต้องขึ้นต้นด้วยคำนี้ (Prefix Search)
+      // 'i' : หมายถึง ไม่คำนึงถึงตัวพิมพ์เล็ก/ใหญ่ (Case Insensitive)
+      const searchRegex = new RegExp('^' + Trim_pro_name, 'i');
+      
+      // Criteria B: pro_name ต้องขึ้นต้นด้วยคำค้นหา
+      // MongoDB จะใช้ Regex Index (ถ้ามี) หรือทำ Table Scan (ถ้าไม่มี)
+      queryCriteria.pro_name = searchRegex; 
+    }
+
+    console.log("$text", queryCriteria);
+
+    // 4. แสดงผล Criteria ที่จะใช้ค้นหา
+    console.log("Final Query Criteria:", queryCriteria);
+
+    // 5. เรียก Service และส่ง Criteria ที่ถูกต้อง
+    const products = await auctionService.getProducts(queryCriteria);
+
     return res
       .status(200)
       .json({ message: "Products fetched successfully", products });
   } catch (error) {
+    // 🚨 การจัดการ Error ที่ดี
+    console.error("Error in getProducts controller:", error);
     return next(error);
   }
 };
@@ -54,6 +100,7 @@ exports.auctionProduct = async (req, res, next) => {
     const productId = parseInt(req.params.productId, 10);
 
     const { bidPrice } = req.body;
+    
     if (!bidPrice || typeof bidPrice !== "number" || bidPrice <= 0) {
       // ส่ง Error 400 (Bad Request) ถ้าข้อมูลไม่ถูกต้อง
       return res.status(400).json({ message: "Invalid bid price provided" });
@@ -74,7 +121,7 @@ exports.auctionProduct = async (req, res, next) => {
       history: history,
     });
   } catch (error) {
-    console.log(error)
+    console.log(error);
     return next(error);
   }
 };
@@ -112,3 +159,16 @@ exports.checkToken = async (req, res, next) => {
     res.status(200).json({ message: "Token is valid." });
   });
 };
+
+exports.coinPacket = async (req, res, next) => {
+  const { coinPacket } = req.body
+  console.log(coinPacket)
+  const userId = req.user.id
+  
+  try {
+    const result = await auctionService.coinPacket(userId, +coinPacket)
+    return res.status(200).json({ message: "Top up coin successfully" })
+  } catch (error) {
+    return next(error)
+  }
+}

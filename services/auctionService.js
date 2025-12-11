@@ -1,8 +1,10 @@
 const Product = require("../models/Product");
 const Bid = require("../models/Bid");
+const User = require("../models/User");
 
-exports.getProducts = async () => {
-  return await Product.find();
+exports.getProducts = async (allQueryParameters = {}) => {
+  console.log("cat", allQueryParameters);
+  return await Product.find(allQueryParameters);
 };
 
 exports.getProductById = async (ProductId) => {
@@ -72,8 +74,12 @@ exports.auctionProduct = async (
   bidPrice,
   broadcastNewBid
 ) => {
-  // 1. 🔍 ค้นหาสินค้า (ใช้ let เพื่อให้เราอัปเดตค่าได้)
   let product = await Product.findOne({ pro_id: productId });
+  let user = await User.findOne({ acc_id: userId });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
 
   if (!product) {
     throw new Error("Product not found");
@@ -81,6 +87,11 @@ exports.auctionProduct = async (
 
   const currentPrice = product.pro_price;
   const minIncrement = product.pro_min_increment || 100; // 🚨 กำหนดค่า Default 100
+  const user_coin = user.acc_coin || 0;
+
+  if (user_coin < bidPrice) {
+    throw new Error("Your coins are insufficient, please top up.");
+  }
 
   // ----------------------------------------------------
   // 2. 🛡️ Business Logic: การตรวจสอบราคาขั้นต่ำ
@@ -97,6 +108,7 @@ exports.auctionProduct = async (
   // 3. 🏁 ตรรกะ "Bid แรก" (ถ้า endTimeAuction ยังไม่มี)
   if (!product.endTimeAuction) {
     console.log("First bid! Starting auction timer...");
+    console.log("statusBefore: ", product.pro_status);
 
     const startTimeAuction = Date.now();
     const endTimeAuction = startTimeAuction + product.pro_time * 1000;
@@ -107,17 +119,18 @@ exports.auctionProduct = async (
       {
         startTimeAuction: startTimeAuction,
         endTimeAuction: endTimeAuction,
+        pro_status: "processing",
       },
       { new: true } // Option: ขอข้อมูลใหม่กลับมา
     );
 
     // อัปเดตตัวแปร 'product' ให้เป็นข้อมูลใหม่ที่มี 'endTimeAuction' แล้ว
     product = updatedProduct;
+    console.log("statusAfter: ", product.pro_status);
   }
 
   // 4. ⏰ (ปรับปรุง) ตรวจสอบเวลา (ตอนนี้ 'product.endTimeAuction' มีค่าแน่นอนแล้ว)
   if (Date.now() > product.endTimeAuction) {
-    // 🛡️ (ปรับปรุง) ใช้ throw Error แทนการ return string
     const error = new Error("Auction has ended.");
     error.statusCode = 400; // ⬅️ กำหนด 400 Bad Request
     throw error;
@@ -125,7 +138,6 @@ exports.auctionProduct = async (
 
   // 5. 💰 ตรวจสอบราคา
   if (bidPrice <= product.pro_price) {
-    // 🛡️ (ปรับปรุง) ใช้ throw Error
     throw new Error("Bid price must be higher than the current price");
   }
 
@@ -139,6 +151,16 @@ exports.auctionProduct = async (
     bidAmount: bidPrice,
   });
   await newBid.save();
+
+  const updatedUser = await User.findOneAndUpdate(
+    { acc_id: userId, acc_coin: { $gte: bidPrice } },
+    { $inc: { acc_coin: -bidPrice } },
+    { new: true }
+  );
+
+  if (!updatedUser) {
+    throw new Error("Coin insufficient or user not found.");
+  }
 
   // 7. 🔄 อัปเดตสถานะสินค้า (ราคาปัจจุบัน และ ผู้ประมูลล่าสุด)
   // ❗️ (แก้ไข Syntax) แยก Query และ Update Object
@@ -167,3 +189,49 @@ exports.auctionProduct = async (
 exports.auctionHistory = async (userId, productId) => {
   return await Bid.find({ pro_id: productId }).sort({ createdAt: -1 });
 };
+
+exports.checkAndEndAuctions = async () => {
+  try {
+    const currentTime = Date.now();
+
+    const criteria = {
+      pro_status: "processing",
+      endTimeAuction: { $lte: currentTime },
+    };
+
+    const result = await Product.updateMany(criteria, {
+      $set: {
+        pro_status: "ended",
+      },
+    });
+    console.log(`[Scheduler] Ended ${result.modifiedCount} auctions.`);
+
+    return result.modifiedCount;
+  } catch (error) {
+  // 💡 Tech Stack: Logging
+  console.error("CRON JOB FAILED: checkAndEndAuctions Error:", error); 
+  // 💡 Business Logic: อาจส่งการแจ้งเตือนไปยังระบบ monitoring หรือ Slack/Email
+}
+};
+
+exports.coinPacket = async(userId, coinPacket) => {
+  console.log(typeof(coinPacket))
+  const user = await User.findOne({ acc_id: userId })
+
+  if(!user){
+    throw new Error("User not found, contact team service")
+  }
+
+  if(coinPacket <= 0 || typeof coinPacket !== 'number'){
+    console.log(1)
+    throw new Error("Coin Packet invalid")
+  }
+
+  const updatedUser = await User.findOneAndUpdate(
+    { acc_id: userId},
+    { $inc: {acc_coin: +coinPacket} },
+    { new: true }
+  )
+
+  return updatedUser
+}

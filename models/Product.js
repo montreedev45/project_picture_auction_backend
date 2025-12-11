@@ -49,7 +49,10 @@ const productSchema = new mongoose.Schema({
     timestamps: true 
 });
 
-
+productSchema.index({
+    pro_status: 1,
+    endTimeAuction: 1
+})
 
 
 
