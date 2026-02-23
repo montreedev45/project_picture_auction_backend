@@ -1,4 +1,4 @@
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const saltRounds = 5; // ยิ่งมากยิ่งปลอดภัย แต่ยิ่งช้า
 const User = require("../models/User");
