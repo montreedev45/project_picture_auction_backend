@@ -324,7 +324,7 @@ exports.forgotPassword = async (email) => {
   await user.save({ validateBeforeSave: false });
 
   // 5. Business Logic: เตรียมและส่งอีเมล
-  const resetURL = `${process.env.FRONTEND_URL}/reset-password/${resetTokenPlainText}`;
+  const resetURL = `${process.env.CLIENT_URL}/reset-password/${resetTokenPlainText}`;
   const message = `
         <h1>Password Reset Request</h1>
         <p>You are receiving this because you (or someone else) has requested the reset of the password for your account.</p>

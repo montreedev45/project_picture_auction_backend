@@ -1,10 +1,80 @@
 const Product = require("../models/Product");
 const Bid = require("../models/Bid");
 const User = require("../models/User");
+const { prepareDashboardData } = require("../formatDate");
+const { default: mongoose } = require("mongoose");
 
-exports.getProducts = async (allQueryParameters = {}) => {
-  console.log("cat", allQueryParameters);
-  return await Product.find(allQueryParameters);
+exports.getProducts = async (
+  allQueryParameters = {},
+  accId = "",
+  page = "",
+  userId = 0,
+  dropdownMonth = "January",
+) => {
+  //console.log("allQueryParameters", allQueryParameters)
+  let queryConditions = { ...allQueryParameters };
+  let bidHis = null;
+  let dataDashboard = [
+    { id: 1, key: "myBid", name: "My Bid", value: 0 },
+    { id: 2, key: "myWinning", name: "My Wining", value: 0 },
+    { id: 3, key: "saveItem", name: "Save Item", value: 0 },
+  ];
+
+  if (accId) {
+    queryConditions.pro_accby = String(accId);
+
+    const result = await Product.find(queryConditions).exec();
+    return { products: result };
+  }
+
+  if (page === "mybid" && userId > 0) {
+    bidHis = await Bid.distinct("pro_id", { acc_id: userId });
+    queryConditions.pro_id = { $in: bidHis };
+  }
+
+  if (page === "dashboard" && userId > 0) {
+    const dataProducts = await Product.find().select({
+      updatedAt: 1,
+      pro_price: 1,
+      _id: 0,
+    });
+    const result = prepareDashboardData(dataProducts);
+    const finalData = result.map((item) => {
+      return {
+        // แทนที่ updatedAt ด้วยข้อมูล month และ week
+        month: item.month,
+        week: item.week,
+        price: item.price,
+      };
+    });
+    console.log(dropdownMonth);
+    const filterFinalData = finalData.filter(
+      (item) => item.month == dropdownMonth,
+    );
+    console.log("filterFinalData", filterFinalData);
+
+    //myBid
+    bidHis = await Bid.distinct("pro_id", { acc_id: userId });
+    dataDashboard[0].value = bidHis.length;
+
+    //myWinning
+    const winning = await Product.find({
+      pro_accby: userId,
+      pro_status: "ended",
+    });
+    dataDashboard[1].value = winning.length;
+
+    //saveItem
+    dataDashboard[2].value = await Product.countDocuments({ likes: userId });
+
+    //console.log(dataDashboard)
+    return {
+      dashboardPiechart: dataDashboard,
+      dashboardBarchart: filterFinalData,
+    };
+  }
+  const result = await Product.find(queryConditions).exec();
+  return { products: result };
 };
 
 exports.getProductById = async (ProductId) => {
@@ -55,7 +125,7 @@ exports.toggleLike = async (productId, userId) => {
   const updatedProducts = await Product.findOneAndUpdate(
     { pro_id: productId }, // 💡 ใช้ Object query เพื่อความชัดเจน
     updateOperation,
-    { new: true } // คืนค่า Document ที่อัปเดตแล้ว
+    { new: true }, // คืนค่า Document ที่อัปเดตแล้ว
   );
 
   console.log("action : ", action);
@@ -72,166 +142,204 @@ exports.auctionProduct = async (
   userId,
   productId,
   bidPrice,
-  broadcastNewBid
+  broadcastNewBid,
 ) => {
-  let product = await Product.findOne({ pro_id: productId });
-  let user = await User.findOne({ acc_id: userId });
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  if (!user) {
-    throw new Error("User not found");
-  }
+  try {
+    // 1. ดึงข้อมูลภายใน Session เพื่อป้องกัน Race Condition
+    //ใช้ .session(session) สำคัญมากในระบบประมูล
+    let product = await Product.findOne({ pro_id: productId }).session(session);
+    console.log("pro_accBy", product.pro_accby);
+    let user = await User.findOne({ acc_id: userId }).session(session);
+    let status = "rebid";
 
-  if (!product) {
-    throw new Error("Product not found");
-  }
+    if (!product.endTimeAuction) status = "start";
+    console.log("status", status);
 
-  const currentPrice = product.pro_price;
-  const minIncrement = product.pro_min_increment || 100; // 🚨 กำหนดค่า Default 100
-  const user_coin = user.acc_coin || 0;
+    if (!user) throw new Error("User not found");
+    if (!product) throw new Error("Product not found");
 
-  if (user_coin < bidPrice) {
-    throw new Error("Your coins are insufficient, please top up.");
-  }
+    const previousBidder = product.pro_accby;
+    const previousPrice = product.pro_price || 0;
+    const minIncrement = product.pro_min_increment || 100;
+    const requiredMinimumBid = product.pro_price + minIncrement;
 
-  // ----------------------------------------------------
-  // 2. 🛡️ Business Logic: การตรวจสอบราคาขั้นต่ำ
-  // ----------------------------------------------------
-  const requiredMinimumBid = currentPrice + minIncrement;
+    // 2. Validation Logic
+    if (user.acc_coin < bidPrice) {
+      throw new Error("Your coins are insufficient, please top up.");
+    }
 
-  if (bidPrice < requiredMinimumBid) {
-    // 🚨 CRITICAL: ถ้าไม่ผ่านเงื่อนไข ให้ Throw Error
-    // พร้อมข้อความที่ชัดเจน
-    throw new Error(
-      `Bid amount must be at least $${requiredMinimumBid} (Current Price + Minimum Increment).`
+    if (bidPrice < requiredMinimumBid) {
+      throw new Error(`Bid amount must be at least $${requiredMinimumBid}`);
+    }
+
+    // 3. logic การคืนเงิน (Refund Previous Bidder)
+    if (previousBidder && previousBidder !== userId) {
+      const refundUpdate = await User.findOneAndUpdate(
+        { acc_id: previousBidder },
+        { $inc: { acc_coin: previousPrice } },
+        { session, new: true },
+      );
+      if (!refundUpdate)
+        console.error("Refund failed for user:", previousBidder);
+    }
+
+    // 4. เริ่มตั้งเวลาประมูล (ถ้ายังไม่มี)
+    if (!product.endTimeAuction) {
+      const startTimeAuction = Date.now();
+      const endTimeAuction = startTimeAuction + product.pro_time * 1000;
+
+      product = await Product.findOneAndUpdate(
+        { pro_id: productId },
+        {
+          startTimeAuction,
+          endTimeAuction,
+          pro_status: "processing",
+        },
+        { session, new: true },
+      );
+    }
+
+    // 5. ตรวจสอบเวลา (เช็คหลังจากอัปเดตข้อมูลล่าสุด)
+    if (product.endTimeAuction && Date.now() > product.endTimeAuction) {
+      const error = new Error("Auction has ended.");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // 6. หักเงินผู้ประมูลใหม่
+    const updatedUser = await User.findOneAndUpdate(
+      { acc_id: userId, acc_coin: { $gte: bidPrice } },
+      { $inc: { acc_coin: -bidPrice } },
+      { session, new: true },
     );
-  }
-  // 3. 🏁 ตรรกะ "Bid แรก" (ถ้า endTimeAuction ยังไม่มี)
-  if (!product.endTimeAuction) {
-    console.log("First bid! Starting auction timer...");
-    console.log("statusBefore: ", product.pro_status);
 
-    const startTimeAuction = Date.now();
-    const endTimeAuction = startTimeAuction + product.pro_time * 1000;
+    if (!updatedUser)
+      throw new Error("Coin insufficient or user not found during update.");
 
-    // ใช้ { new: true } เพื่อรับเอกสารที่อัปเดตแล้วกลับมา
-    const updatedProduct = await Product.findOneAndUpdate(
-      { pro_id: productId }, // Query
+    // 7. บันทึกประวัติและอัปเดตสินค้า
+    const newBid = new Bid({
+      pro_id: productId,
+      acc_id: userId,
+      bidAmount: bidPrice,
+    });
+    await newBid.save({ session });
+
+    const finalProductUpdate = await Product.findOneAndUpdate(
+      { pro_id: productId },
+      { pro_price: bidPrice, pro_accby: userId },
+      { session, new: true },
+    );
+
+    // ยืนยันธุรกรรมทั้งหมด
+    await session.commitTransaction();
+
+    // ดึงประวัติและ Broadcast (ทำนอก Transaction เพื่อความเร็ว)
+    const history = await Bid.find({ pro_id: productId }).sort({
+      createdAt: -1,
+    });
+
+
+
+    const notification = [
       {
-        startTimeAuction: startTimeAuction,
-        endTimeAuction: endTimeAuction,
-        pro_status: "processing",
+        notic_id: Math.random().toString(36).substring(2, 9),
+        acc_id: user.acc_id,
+        pro_id: product.pro_id,
+        status: status,
       },
-      { new: true } // Option: ขอข้อมูลใหม่กลับมา
-    );
+    ];
+    //console.log(notification)
 
-    // อัปเดตตัวแปร 'product' ให้เป็นข้อมูลใหม่ที่มี 'endTimeAuction' แล้ว
-    product = updatedProduct;
-    console.log("statusAfter: ", product.pro_status);
-  }
+    broadcastNewBid(productId, finalProductUpdate, history, notification);
 
-  // 4. ⏰ (ปรับปรุง) ตรวจสอบเวลา (ตอนนี้ 'product.endTimeAuction' มีค่าแน่นอนแล้ว)
-  if (Date.now() > product.endTimeAuction) {
-    const error = new Error("Auction has ended.");
-    error.statusCode = 400; // ⬅️ กำหนด 400 Bad Request
+    return {
+      updatedProduct: finalProductUpdate,
+      history: history,
+    };
+  } catch (error) {
+    // หากพลาดตรงไหน ให้ยกเลิกทุกอย่าง (Rollback)
+    await session.abortTransaction();
+    console.error("Auction Transaction Aborted:", error.message);
     throw error;
+  } finally {
+    session.endSession();
   }
-
-  // 5. 💰 ตรวจสอบราคา
-  if (bidPrice <= product.pro_price) {
-    throw new Error("Bid price must be higher than the current price");
-  }
-
-  // --- ถ้าผ่านทุกอย่าง ---
-
-  // 6. 📝 บันทึกประวัติการประมูล (Bid History)
-  // ❗️ (แก้ไข Syntax) ส่งค่าเป็น Object เดียว
-  const newBid = new Bid({
-    pro_id: productId, // (ผมอ้างอิงจากโค้ดเดิมของคุณ)
-    acc_id: userId, // (ผมอ้างอิงจากโค้ดเดิมของคุณ)
-    bidAmount: bidPrice,
-  });
-  await newBid.save();
-
-  const updatedUser = await User.findOneAndUpdate(
-    { acc_id: userId, acc_coin: { $gte: bidPrice } },
-    { $inc: { acc_coin: -bidPrice } },
-    { new: true }
-  );
-
-  if (!updatedUser) {
-    throw new Error("Coin insufficient or user not found.");
-  }
-
-  // 7. 🔄 อัปเดตสถานะสินค้า (ราคาปัจจุบัน และ ผู้ประมูลล่าสุด)
-  // ❗️ (แก้ไข Syntax) แยก Query และ Update Object
-  const finalProductUpdate = await Product.findOneAndUpdate(
-    { pro_id: productId }, // Query
-    {
-      pro_price: bidPrice,
-      pro_accby: userId, // (ไม่ต้องใช้ `${userId}` ถ้า userId เป็น string อยู่แล้ว)
-    },
-    { new: true } // ขอข้อมูลใหม่
-  );
-
-  const history = await Bid.find({ pro_id: productId }).sort({ createdAt: -1 });
-  console.log("Debug Service: Ready to Broadcast to:", productId); // 💡 เพิ่ม Log
-  console.log("Debug Service: New Price:", finalProductUpdate.pro_price); // 💡 เพิ่ม Log
-
-  broadcastNewBid(productId, finalProductUpdate, history);
-
-  // 8. ✅ ส่งข้อมูลกลับไปที่ Controller
-  return {
-    updatedProduct: finalProductUpdate,
-    history: history,
-  };
 };
 
 exports.auctionHistory = async (userId, productId) => {
   return await Bid.find({ pro_id: productId }).sort({ createdAt: -1 });
 };
 
-exports.checkAndEndAuctions = async () => {
+exports.checkAndEndAuctions = async (broadcastWinner) => {
   try {
-    const currentTime = Date.now();
+    const now = new Date();
+    const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000);
 
+    // 1. อัปเดตสินค้าที่หมดเวลาแล้วให้เป็นสถานะ "ended"
     const criteria = {
       pro_status: "processing",
-      endTimeAuction: { $lte: currentTime },
+      endTimeAuction: { $lte: now },
     };
 
     const result = await Product.updateMany(criteria, {
-      $set: {
-        pro_status: "ended",
+      $set: { pro_status: "ended" },
+    });
+
+    if (result.modifiedCount > 0) {
+      console.log(`[Scheduler] Ended ${result.modifiedCount} auctions.`);
+    }
+
+    // 2. ดึงรายชื่อสินค้าที่เพิ่ง "ended" ภายใน 2 นาทีที่ผ่านมา
+    const productsEnded = await Product.find({
+      pro_status: "ended",
+      endTimeAuction: {
+        $lt: now,
+        $gte: twoMinutesAgo,
       },
     });
-    console.log(`[Scheduler] Ended ${result.modifiedCount} auctions.`);
+
+    // 3. ตรวจสอบว่ามีสินค้าที่จบลงจริงๆ ไหมก่อนสร้าง Notification
+    if (productsEnded.length > 0) {
+      // 💡 ใช้ .map() เพื่อสร้าง Array ของ Notification สำหรับทุกคน
+      const notifications = productsEnded.map((product) => ({
+        notic_id: Math.random().toString(36).substring(2, 9),
+        acc_id: product.pro_accby, // ดึงจากรายชิ้นใน Loop
+        pro_id: product.pro_id,
+        status: "winner",
+      }));
+
+      console.log("Sending notifications:", notifications);
+      
+      // ส่งข้อมูลผ่าน Socket/Broadcast
+      broadcastWinner(notifications);
+    }
 
     return result.modifiedCount;
   } catch (error) {
-  // 💡 Tech Stack: Logging
-  console.error("CRON JOB FAILED: checkAndEndAuctions Error:", error); 
-  // 💡 Business Logic: อาจส่งการแจ้งเตือนไปยังระบบ monitoring หรือ Slack/Email
-}
+    console.error("CRON JOB FAILED:", error);
+  }
 };
 
-exports.coinPacket = async(userId, coinPacket) => {
-  console.log(typeof(coinPacket))
-  const user = await User.findOne({ acc_id: userId })
+exports.coinPacket = async (userId, coinPacket) => {
+  const user = await User.findOne({ acc_id: userId });
 
-  if(!user){
-    throw new Error("User not found, contact team service")
+  if (!user) {
+    throw new Error("User not found, contact team service");
   }
 
-  if(coinPacket <= 0 || typeof coinPacket !== 'number'){
-    console.log(1)
-    throw new Error("Coin Packet invalid")
+  if (coinPacket <= 0 || typeof coinPacket !== "number") {
+    console.log(1);
+    throw new Error("Coin Packet invalid");
   }
 
   const updatedUser = await User.findOneAndUpdate(
-    { acc_id: userId},
-    { $inc: {acc_coin: +coinPacket} },
-    { new: true }
-  )
+    { acc_id: userId },
+    { $inc: { acc_coin: +coinPacket } },
+    { new: true },
+  );
 
-  return updatedUser
-}
+  return updatedUser;
+};

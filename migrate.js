@@ -4,8 +4,8 @@ const Product = require("./models/Product");
 
 const MONGO_URI =
   "mongodb+srv://montreedev45_db_user:ZYZ9yw0sM61kGEB5@auction-picture.jkvfaeq.mongodb.net/picture_auction_db";
-const FIELD = "pro_min_increment";
-const DEFAULT_VALUE = 100; // 💡 กำหนดค่า Default ที่นี่
+const FIELD = "pro_status";
+const DEFAULT_VALUE = "ended"; // 💡 กำหนดค่า Default ที่นี่
 
 async function runMigration() {
   let modifiedCount = 0;
@@ -20,9 +20,8 @@ async function runMigration() {
     const filter = {
       $or: [
         // 1. เอกสารที่ไม่มี Field นี้เลย ($exists: false)
-        { [FIELD]: { $exists: false } },
         // 2. เอกสารที่มี Field นี้ แต่ค่าเป็น null (หรือ undefined/ค่าว่าง)
-        { [FIELD]: null }, // MongoDB ตีความ null ว่ารวมถึง undefined ด้วยในหลายกรณี
+        { [FIELD]: "winning" }, // MongoDB ตีความ null ว่ารวมถึง undefined ด้วยในหลายกรณี
       ],
     };
 

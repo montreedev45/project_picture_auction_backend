@@ -10,7 +10,7 @@ const { uploadProfilePic } = require('../middlewares/uploadMiddleware')
 // --- API Endpoints ---
 
 // 1. GET /api/auction/products - ดึงสินค้าทั้งหมด
-router.get('/products', auctionController.getProducts);
+router.get('/products',auctionController.getProducts);
 
 // 2. GET /api/auction/product/:id - ดึงสินค้าตาม ID
 router.get('/product/:id', auctionController.getProductById);

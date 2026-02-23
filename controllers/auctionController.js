@@ -2,17 +2,24 @@ const auctionService = require("../services/auctionService");
 const { broadcastNewBid } = require("../socketManager"); // ⬅️ ต้องแก้ไข Path นี้ให้ถูกต้อง
 
 exports.getProducts = async (req, res, next) => {
+//console.log(`[${new Date().toLocaleTimeString()}] incoming request: ${req.method} ${req.url}`);
   try {
+    const { acc_id, is_time_sensitive, page ,userId, dropdownMonth} = req.query || {};
+    let queryCriteria = {};
     // 1. 🎯 แก้ไข: ดึงเฉพาะ key 'category' ออกจาก req.query
     // 🔑 ถ้าไม่ส่งมา category จะเป็น undefined
     const { "status[]": pro_status, pro_name_input: pro_name } = req.query;
 
-    // 💡 หากต้องการดู Query Parameters ทั้งหมด
-    console.log("pro_name_input", pro_name);
-    console.log("All Query Params:", req.query);
-    console.log("Category Query Value:", pro_status); // ค่าที่ส่งมาสำหรับ category
+    if (is_time_sensitive === "true") {
+      const currentTime = Date.now();
 
-    let queryCriteria = {};
+      queryCriteria.endTimeAuction = { $lte: currentTime };
+    }
+
+    // 💡 หากต้องการดู Query Parameters ทั้งหมด
+    // console.log("pro_name_input", pro_name);
+    // console.log("All Query Params:", req.query);
+    // console.log("Category Query Value:", pro_status); // ค่าที่ส่งมาสำหรับ category
 
     // 2. 🔧 จัดการค่า: ทำให้เป็น Array ของ Category เสมอ
     // เช่น: undefined => [], 'Electronics' => ['Electronics'], ['E', 'B'] => ['E', 'B']
@@ -33,24 +40,30 @@ exports.getProducts = async (req, res, next) => {
       // 🔑 สร้าง Regular Expression
       // '^' : หมายถึง ต้องขึ้นต้นด้วยคำนี้ (Prefix Search)
       // 'i' : หมายถึง ไม่คำนึงถึงตัวพิมพ์เล็ก/ใหญ่ (Case Insensitive)
-      const searchRegex = new RegExp('^' + Trim_pro_name, 'i');
-      
+      const searchRegex = new RegExp("^" + Trim_pro_name, "i");
+
       // Criteria B: pro_name ต้องขึ้นต้นด้วยคำค้นหา
       // MongoDB จะใช้ Regex Index (ถ้ามี) หรือทำ Table Scan (ถ้าไม่มี)
-      queryCriteria.pro_name = searchRegex; 
+      queryCriteria.pro_name = searchRegex;
     }
 
-    console.log("$text", queryCriteria);
+    //console.log("$text", queryCriteria);
 
     // 4. แสดงผล Criteria ที่จะใช้ค้นหา
-    console.log("Final Query Criteria:", queryCriteria);
+    //console.log("Final Query Criteria:", queryCriteria);
 
     // 5. เรียก Service และส่ง Criteria ที่ถูกต้อง
-    const products = await auctionService.getProducts(queryCriteria);
+    const { products = [], dashboardPiechart = [], dashboardBarchart = [] } = await auctionService.getProducts(
+      queryCriteria,
+      acc_id,
+      page,
+      userId,
+      dropdownMonth
+    );
 
     return res
       .status(200)
-      .json({ message: "Products fetched successfully", products });
+      .json({ message: "Products fetched successfully", products: products, dashboardPiechart: dashboardPiechart, dashboardBarchart: dashboardBarchart });
   } catch (error) {
     // 🚨 การจัดการ Error ที่ดี
     console.error("Error in getProducts controller:", error);
@@ -100,7 +113,7 @@ exports.auctionProduct = async (req, res, next) => {
     const productId = parseInt(req.params.productId, 10);
 
     const { bidPrice } = req.body;
-    
+
     if (!bidPrice || typeof bidPrice !== "number" || bidPrice <= 0) {
       // ส่ง Error 400 (Bad Request) ถ้าข้อมูลไม่ถูกต้อง
       return res.status(400).json({ message: "Invalid bid price provided" });
@@ -161,14 +174,14 @@ exports.checkToken = async (req, res, next) => {
 };
 
 exports.coinPacket = async (req, res, next) => {
-  const { coinPacket } = req.body
-  console.log(coinPacket)
-  const userId = req.user.id
-  
+  const { coinPacket } = req.body;
+  console.log(coinPacket);
+  const userId = req.user.id;
+
   try {
-    const result = await auctionService.coinPacket(userId, +coinPacket)
-    return res.status(200).json({ message: "Top up coin successfully" })
+    const result = await auctionService.coinPacket(userId, +coinPacket);
+    return res.status(200).json({ message: "Top up coin successfully" });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};

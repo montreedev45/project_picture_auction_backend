@@ -8,8 +8,7 @@ const setSocketIO = (socketIOInstance) => {
 };
 
 // 2. ฟังก์ชันสำหรับ Broadcast ที่ปลอดภัย
-const broadcastNewBid = (productId, updatedProduct, latestHistory) => {
-  console.log(updatedProduct);
+const broadcastNewBid = (productId, updatedProduct, latestHistory, notification = "") => {
   // 2. 🛡️ Safety Check: ถ้า io ยังไม่ถูกตั้งค่า ให้ Log Error
   if (!io) {
     console.error("Socket.IO instance not initialized!");
@@ -30,9 +29,23 @@ const broadcastNewBid = (productId, updatedProduct, latestHistory) => {
   console.log(
     `📢 Broadcast: Auction updated for product ${productIdString}. Product : ${updatedProduct}`
   );
+
+  io.emit("received_notification", {
+    notification : notification || [],
+    history: latestHistory
+  })
 };
+
+const broadcastWinner = (notification) => {
+  console.log("starting.... emit winner")
+
+  io.emit("winner", {
+    notification: notification
+  })
+}
 
 module.exports = {
   setSocketIO,
   broadcastNewBid, // 🔑 Export ฟังก์ชันใหม่
+  broadcastWinner,
 };

@@ -9,7 +9,7 @@ const cron = require('node-cron')
 
 const auctionRoutes = require("./routes/auctionRoutes");
 const auctionService = require("./services/auctionService")
-const { setSocketIO, broadcastNewBid } = require('./socketManager');
+const { setSocketIO, broadcastNewBid, broadcastWinner } = require('./socketManager');
 const errorHandler = require("./middlewares/errorHandlerMiddleware");
 dotenv.config();
 
@@ -18,11 +18,10 @@ const httpServer = http.createServer(app); // 1. สร้าง HTTP Server
 const PORT = process.env.PORT || 5000; // 💡 ใส่ Default Port ไว้เผื่อ
 
 databaseConnect();
-
+const allowedOrigin = process.env.CLIENT_URL || "http://localhost:5173";
 
 // 🔑 ฟังก์ชันสำหรับเริ่ม Cron Job
 const startScheduler = () => {
-  console.log('Auction scheduler started. Checking every minute.');
     // 🏆 Tech Stack: Cron Expression
     // ตั้งค่าให้รันทุกๆ 1 นาที:
     // * * * * *
@@ -33,25 +32,28 @@ const startScheduler = () => {
     // | ----------- ชั่วโมง (0-23)
     // ------------- นาที (0-59)
     
-    cron.schedule('* * * * *', async () => {
-        console.log('Running auction check job...');
-        await auctionService.checkAndEndAuctions();
-    });
+    cron.schedule('*/30 * * * *', async () => {
+    try {
+        await auctionService.checkAndEndAuctions(broadcastWinner);
+    } catch (error) {
+        // แนะนำให้ใส่ try-catch เสมอใน Cron Job เพื่อป้องกัน App ล่มหากเกิด Error ระหว่าง Check
+        console.error('Error in auction check job:', error);
+    }
+});
     
     // 💡 หากต้องการรันทุก 30 วินาที (node-cron ทำไม่ได้ แต่จะใช้ '* * * * *' เป็นทางเลือกที่ดีที่สุด)
     // 💡 หรือหากต้องการความแม่นยำสูง ให้ใช้ cron.schedule('*/5 * * * * *', ...); (ถ้า Node-Cron รองรับวินาที)
     
 };
 
-startScheduler()
+startScheduler() 
 
 // ------------------------------------------------
 // SOCKET.IO SETUP
 // ------------------------------------------------
 const io = new Server(httpServer, {
-  // 2. ผูก Socket.IO เข้ากับ httpServer
   cors: {
-    origin: "http://localhost:5173",
+    origin: allowedOrigin,
     methods: ["GET", "POST"],
   },
 });
@@ -61,10 +63,12 @@ const io = new Server(httpServer, {
 // ------------------------------------------------
 io.on("connection", (socket) => {
   console.log(`✅ User connected: ${socket.id}`);
+  
   socket.on("join_auction", (productId) => {
     socket.join(productId);
     console.log(`User ${socket.id} joined room: ${productId}`);
   });
+
   socket.on("disconnect", () => {
     console.log(`❌ User disconnected: ${socket.id}`);
   });
@@ -80,7 +84,6 @@ setSocketIO(io);
 // ------------------------------------------------
 // ⚠️ เนื่องจากคุณตั้งค่า CORS สำหรับ Socket.IO ไปแล้ว
 // CORS Middleware สำหรับ Express ก็ยังจำเป็นต้องมี
-const allowedOrigin = process.env.CLIENT_URL || "http://localhost:5173";
 const corsOptions = {
   origin: allowedOrigin,
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
@@ -114,4 +117,4 @@ httpServer.listen(PORT, () => {
 // ------------------------------------------------
 // 5. EXPORT - ต้อง Export broadcastNewBid เพื่อให้ Service Layer เรียกใช้ได้
 // ------------------------------------------------
-module.exports = { app, broadcastNewBid }; // 💡 ไม่จำเป็นต้อง Export httpServer
+module.exports = { app, broadcastNewBid , broadcastWinner}; // 💡 ไม่จำเป็นต้อง Export httpServer
