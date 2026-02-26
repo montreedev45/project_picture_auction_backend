@@ -107,42 +107,26 @@ const saveNewUser = async (userData) => {
 
 // Login
 exports.loginUser = async (username, password) => {
-  // 🔑 Tech Stack: ใช้ .select('+acc_password') เพื่อเรียกฟิลด์ที่ถูกซ่อนไว้
-  const user = await User.findOne({ acc_username: username }).select(
-    //check username
-    "+acc_password"
-  );
+  console.time("login_total");
 
-  if (!user) {
-    const err = new Error("Invalid username or password.");
-    err.statusCode = 401;
-    throw err;
-  }
+  console.time("db_query");
+  const user = await User.findOne({ acc_username: username })
+    .select("+acc_password acc_id acc_username")
+    .lean();
+  console.timeEnd("db_query");
 
-  let userRespon = user.toJSON(); //แปลงเป็น json เพื่อเอา meta data ออก
-
-  delete userRespon.__v;
-  delete userRespon.acc_password;
-  delete userRespon._id;
-  delete userRespon.createdAt;
-  delete userRespon.updatedAt;
-
-  // Check: Compare Password
+  console.time("bcrypt_compare");
   const isMatch = await bcrypt.compare(password, user.acc_password);
+  console.timeEnd("bcrypt_compare");
 
-  if (!isMatch) {
-    const error = new Error("Invalid credentials.");
-    error.statusCode = 401;
-    throw error;
-  }
-
-  // 3. Token Generation
+  console.time("token_generate");
+  const { acc_password, _id, ...userRespon } = user;
   const token = generateAuthToken(userRespon);
+  console.timeEnd("token_generate");
 
-  return {
-    token,
-    user: userRespon,
-  };
+  console.timeEnd("login_total");
+
+  return { token, user: userRespon };
 };
 
 // 💡 Business Logic: Field ที่อนุญาตให้อัปเดต (ต้องตรงกับ Schema)

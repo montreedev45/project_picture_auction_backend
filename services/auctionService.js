@@ -156,7 +156,6 @@ exports.auctionProduct = async (
     let status = "rebid";
 
     if (!product.endTimeAuction) status = "start";
-    console.log("status", status);
 
     if (!user) throw new Error("User not found");
     if (!product) throw new Error("Product not found");
